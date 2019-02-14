@@ -6,7 +6,17 @@
 #include <sstream>
 #include <windows.h>
 
+
+
+#define ASSERT(x) if (!(x)) __debugbreak();
+
+#define GLCall(x) GLClearError();\
+	x;\
+	ASSERT(GLLogCall(#x, __FILE__, __LINE__))
+
+
 // function declarations
+
 
 struct ShaderSource {
 	std::string vertexSource;
@@ -18,6 +28,13 @@ static unsigned int CompileShader(unsigned int type, const std::string& source);
 static unsigned int CreateShader(const std::string& vertexShader, const std::string& fragmentShader);
 
 static ShaderSource ParseShader(const std::string& filepath);
+
+static void GLClearError();
+static bool GLLogCall(const char* function, const char* file, int line);
+
+
+
+
 
 
 
@@ -55,45 +72,75 @@ int main(void)
 
 	float bufferPositionData[] = {
 		-0.5f, -0.5f,
-		 0.0f,  0.5f,
-		 0.5f, -0.5f
-	};	// store the data that will be placed in the VRAM
+		 0.5f, -0.5f,
+		 0.5f,  0.5f,
+		-0.5f,  0.5f
+	};	// store some data that is going to be placed in the VRAM
+	
+
+	unsigned int posId[]{ // list of vertices stored by their identity
+		0, 1, 2, 
+		2, 3, 0
+	};
 
 	unsigned int buffer;
-	glGenBuffers(1, &buffer); // give the buffer an ID
-	//std::cout << buffer << std::endl;
-	glBindBuffer(GL_ARRAY_BUFFER, buffer); // bind the buffer to the ID
-	glBufferData(GL_ARRAY_BUFFER, 6 * sizeof(float), bufferPositionData, GL_STATIC_DRAW); // set aside places in memory for the data, then give it the data
+	GLCall(glGenBuffers(1, &buffer)); // give the buffer an ID
+	GLCall(glBindBuffer(GL_ARRAY_BUFFER, buffer)); // bind the buffer to the ID
+	GLCall(glBufferData(GL_ARRAY_BUFFER, 6 * 2 * sizeof(float), bufferPositionData, GL_STATIC_DRAW));
+	// set aside places in memory for the data, then give it the data
 
-	glEnableVertexAttribArray(0); // enable the attribute - tell the machine to use the new layout for the attribute
-	// the 0's here mean that this is modifying the positions of the vertices, since there are no others here right now
+
+
+	GLCall(glEnableVertexAttribArray(0));
+	// enable the attribute - tell the machine to use the new layout for the attribute
+	// the 0's here mean that this is modifying the positions of the vertices, 
+	// since there are no others here right now
 	// all of them are going to be 0.
+	GLCall(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0));
+	/* tell opengl how to interpret the data it gets - in this case, it is affecting the buffer that is 
+	linked to 'buffer' (that is, the vertex buffer) and tells it how
+	many pieces of inforrmation are part of each thing, as well as the data type 
+	(there is also some other stuff, though this is not too necessary). */
 
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0); /* tell opengl how to interpret the data it gets -
-	in this case, it is affecting the buffer that is linked to 'buffer' (that is, the vertex buffer) and tells it how
-	many pieces of inforrmation are part of each thing, as well as the data type (there is also some other stuff, though
-	this is not too necessary). */
+
+
+	// ===============================================================================================
+	// index buffers - version of the chunk of code just above that creates a buffer and gives it data
+	// except this one uses numbers that correspond to the index of something in an array of positions
+	// ===============================================================================================
+
+
+	
+	unsigned int ibo; // index buffer object
+	GLCall(glGenBuffers(1, &ibo)); // give the buffer an ID
+	GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo)); // bind the buffer to the ID
+	GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(float), posId, GL_STATIC_DRAW)); // set aside places in memory for the data, then give it the data
+
+
 
 
 	ShaderSource sourceCode = ParseShader("basic.shader");
-	std::cout << sourceCode.vertexSource << std::endl;
-	std::cout << sourceCode.fragmentSource << std::endl;
 
 
 	unsigned int shader = CreateShader(sourceCode.vertexSource, sourceCode.fragmentSource); // build the shaders - create and compile them both
-	glUseProgram(shader); // make the program use the shader
+	GLCall(glUseProgram(shader)); // make the program use the shader
+	
 
 
+	/* 
+		=====================================
+		Loop until the user closes the window
+		=====================================
+	*/
 
 
-	/* Loop until the user closes the window */
 	while (!glfwWindowShouldClose(window))
 	{
 		/* Render here */
-		glClear(GL_COLOR_BUFFER_BIT);
+		GLCall(glClear(GL_COLOR_BUFFER_BIT));
 
 		// make a triangle
-		glDrawArrays(GL_TRIANGLES, 0, 3);
+		GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr));
 
 		/* Swap front and back buffers */
 		glfwSwapBuffers(window);
@@ -120,7 +167,8 @@ int main(void)
 
 
 
-static unsigned int CompileShader(unsigned int type, const std::string& source) {
+static unsigned int CompileShader(unsigned int type, const std::string& source)
+{
 
 
 	unsigned int id = glCreateShader(type); // 'id' is the handle for the shader that we are using
@@ -172,7 +220,8 @@ static unsigned int CompileShader(unsigned int type, const std::string& source) 
 
 
 
-static unsigned int CreateShader(const std::string& vertexShader, const std::string& fragmentShader) {
+static unsigned int CreateShader(const std::string& vertexShader, const std::string& fragmentShader) 
+{
 	unsigned int program = glCreateProgram(); // make the program 
 
 	unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexShader); // run the above function to load the vertex shader's source into it, and compile it
@@ -195,7 +244,8 @@ static unsigned int CreateShader(const std::string& vertexShader, const std::str
 
 
 
-static ShaderSource ParseShader(const std::string& filepath) {
+static ShaderSource ParseShader(const std::string& filepath) 
+{
 
 	
 	std::ifstream stream(filepath); // open a stream from a file
@@ -246,4 +296,23 @@ static ShaderSource ParseShader(const std::string& filepath) {
 
 	return { ss[0].str(), ss[1].str() };
 
+}
+
+
+static void GLClearError() 
+{
+	while (glGetError());
+}
+
+
+static bool GLLogCall(const char* function, const char* file, int line) 
+{
+	// print each error in sequence
+	while (GLenum error = glGetError()) {
+
+		std::cout << "[OpenGL Error] in function " << function << " in file " << file << " on line " << line << std::endl;
+		return false;
+
+	}
+	return true;
 }
